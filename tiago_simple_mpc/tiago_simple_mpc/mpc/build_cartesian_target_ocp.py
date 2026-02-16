@@ -55,8 +55,12 @@ class CartesianOCPConfig:
                 "terminal_weight_multiplier", 10.0
             ),
             frame_name=config_data.get("frame_name", "gripper_grasping_frame"),
-            default_target_position=config_data.get("default_target", {}).get("position", None),
-            default_target_quaternion=config_data.get("default_target", {}).get("quaternion", None),
+            default_target_position=config_data.get("default_target", {}).get(
+                "position", None
+            ),
+            default_target_quaternion=config_data.get("default_target", {}).get(
+                "quaternion", None
+            ),
         )
 
     @classmethod
@@ -77,20 +81,20 @@ class CartesianOCPConfig:
         pkg_share = get_package_share_directory(package_name)
         yaml_path = os.path.join(pkg_share, "config", config_filename)
         return cls.from_yaml(yaml_path)
-    
+
     def get_default_target_pose(self) -> pin.SE3:
-            """Convert default_target config to pin.SE3 pose."""
-            if self.default_target_position is None:
-                raise ValueError("No default_target defined in config!")
-            
-            pos = np.array(self.default_target_position)
-            quat = pin.Quaternion(
-                self.default_target_quaternion[3],  # w
-                self.default_target_quaternion[0],  # x
-                self.default_target_quaternion[1],  # y
-                self.default_target_quaternion[2],  # z
-            )
-            return pin.SE3(quat.matrix(), pos)
+        """Convert default_target config to pin.SE3 pose."""
+        if self.default_target_position is None:
+            raise ValueError("No default_target defined in config!")
+
+        pos = np.array(self.default_target_position)
+        quat = pin.Quaternion(
+            self.default_target_quaternion[3],  # w
+            self.default_target_quaternion[0],  # x
+            self.default_target_quaternion[1],  # y
+            self.default_target_quaternion[2],  # z
+        )
+        return pin.SE3(quat.matrix(), pos)
 
 
 def build_cartesian_target_ocp(
@@ -100,19 +104,19 @@ def build_cartesian_target_ocp(
     target_pose: pin.SE3 = None,
 ) -> MPCOCP:
     """Builds a Crocoddyl OCP for reaching a Cartesian target with the end-effector.
-    
+
     Args:
         x0: Initial state
         model: Pinocchio model
         config: OCP configuration (contient frame_name et default_target)
         target_pose: Target pose (optionnel, utilise config.default_target si None)
     """
-    
+
     # Utilise la target par défaut si non fournie
     if target_pose is None:
         if config.default_target_position is None:
             raise ValueError("No target_pose provided and no default_target in config!")
-        
+
         # Convertir default_target en pin.SE3
         pos = np.array(config.default_target_position)
         quat = pin.Quaternion(
@@ -122,10 +126,10 @@ def build_cartesian_target_ocp(
             config.default_target_quaternion[2],  # z
         )
         target_pose = pin.SE3(quat.matrix(), pos)
-    
+
     # Utilise frame_name de la config
     frame_name = config.frame_name
-    
+
     # Build OCP using OCPBuilder
     ocp_builder = OCPBuilder(
         initial_state=x0,
@@ -141,9 +145,7 @@ def build_cartesian_target_ocp(
 
     # Cost 1: Reach the target
     running_cost_manager.add_frame_placement_cost(
-        frame_name=frame_name, 
-        target_pose=target_pose, 
-        weight=config.ee_tracking_weight
+        frame_name=frame_name, target_pose=target_pose, weight=config.ee_tracking_weight
     )
 
     # Cost 2: State regularization

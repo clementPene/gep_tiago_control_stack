@@ -8,14 +8,14 @@ cartesian_ocp:
   # Cost weights
   ee_tracking_weight: 100.0
   state_reg_weight: 1.0
-  control_reg_weight: 1.0 
-  
+  control_reg_weight: 1.0
+
   # Terminal cost multiplier for the state regularization term
   terminal_weight_multiplier: 10.0
 
   # Task configuration
   frame_name: "gripper_grasping_frame"
-  
+
   # Default target
   default_target:
     position: [0.5, 0.5, 0.5]  # [x, y, z]

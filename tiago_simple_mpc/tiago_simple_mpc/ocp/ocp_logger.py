@@ -3,13 +3,14 @@ import numpy as np
 from datetime import datetime
 import os
 
+
 class OCPLogger:
     """Simple OCP plotter"""
-    
+
     def __init__(self, log_dir="log_ocp"):
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)
-    
+
     def plot_results(self, solver, nq, converged):
         """Generate plots directly from solver"""
 
@@ -61,20 +62,20 @@ class OCPLogger:
         fig, axes = plt.subplots(3, 1, figsize=(12, 10))
 
         # 1. Joint positions
-        axes[0].set_title('Joint Positions')
+        axes[0].set_title("Joint Positions")
         for i in range(nq):
-            axes[0].plot(q_traj[:, i], label=f'q{i+1}')
-        axes[0].set_xlabel('Time step')
-        axes[0].set_ylabel('Position (rad)')
+            axes[0].plot(q_traj[:, i], label=f"q{i + 1}")
+        axes[0].set_xlabel("Time step")
+        axes[0].set_ylabel("Position (rad)")
         axes[0].legend()
         axes[0].grid(True)
 
         # 2. Control effort
-        axes[1].set_title('Control Effort')
+        axes[1].set_title("Control Effort")
         for i in range(u_traj.shape[1]):
-            axes[1].plot(u_traj[:, i], label=f'u{i+1}')
-        axes[1].set_xlabel('Time step')
-        axes[1].set_ylabel('Control (N·m)')
+            axes[1].plot(u_traj[:, i], label=f"u{i + 1}")
+        axes[1].set_xlabel("Time step")
+        axes[1].set_ylabel("Control (N·m)")
         axes[1].legend()
         axes[1].grid(True)
 
@@ -83,39 +84,55 @@ class OCPLogger:
             # Combine running + terminal costs
             all_costs = running_costs + [terminal_cost]
             timesteps = np.arange(len(all_costs))
-            
-            axes[2].set_title(f'Cost per Timestep (Converged: {converged}, Total: {J_total_check:.2f})')
-            axes[2].plot(timesteps, all_costs, 'o-', color='steelblue', linewidth=2, markersize=6)
-            
+
+            axes[2].set_title(
+                f"Cost per Timestep (Converged: {converged}, Total: {J_total_check:.2f})"
+            )
+            axes[2].plot(
+                timesteps, all_costs, "o-", color="steelblue", linewidth=2, markersize=6
+            )
+
             # Highlight terminal cost
-            axes[2].axvline(len(running_costs)-0.5, color='red', linestyle='--', 
-                        linewidth=1.5, alpha=0.7, label='Terminal boundary')
-            axes[2].plot(len(running_costs), terminal_cost, 'o', 
-                        color='orange', markersize=10, label=f'Terminal: {terminal_cost:.2f}')
-            
-            axes[2].set_xlabel('Timestep')
-            axes[2].set_ylabel('Cost')
+            axes[2].axvline(
+                len(running_costs) - 0.5,
+                color="red",
+                linestyle="--",
+                linewidth=1.5,
+                alpha=0.7,
+                label="Terminal boundary",
+            )
+            axes[2].plot(
+                len(running_costs),
+                terminal_cost,
+                "o",
+                color="orange",
+                markersize=10,
+                label=f"Terminal: {terminal_cost:.2f}",
+            )
+
+            axes[2].set_xlabel("Timestep")
+            axes[2].set_ylabel("Cost")
             axes[2].legend()
             axes[2].grid(True, alpha=0.3)
-            
+
             # Add text annotation for running sum
-            axes[2].text(0.02, 0.98, f'Running sum: {J_running:.2f}', 
-                        transform=axes[2].transAxes, verticalalignment='top',
-                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+            axes[2].text(
+                0.02,
+                0.98,
+                f"Running sum: {J_running:.2f}",
+                transform=axes[2].transAxes,
+                verticalalignment="top",
+                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+            )
         else:
-            axes[2].set_title('Cost per Timestep (No data)')
-            axes[2].text(0.5, 0.5, 'Could not extract costs', ha='center', va='center')
+            axes[2].set_title("Cost per Timestep (No data)")
+            axes[2].text(0.5, 0.5, "Could not extract costs", ha="center", va="center")
 
         plt.tight_layout()
 
         # Save
         filepath = os.path.join(self.log_dir, f"ocp_results_{timestamp}.png")
-        plt.savefig(filepath, dpi=150, bbox_inches='tight')
+        plt.savefig(filepath, dpi=150, bbox_inches="tight")
         plt.close()
 
         return filepath
-
-
-
-
-

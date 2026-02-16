@@ -56,7 +56,7 @@ class PositionOCPConfig:
             frame_name=config_data.get("frame_name", "gripper_grasping_frame"),
             default_target_position=np.array(
                 config_data.get("default_target_position", [0.5, 0.0, 1.0]),
-                dtype=np.float64
+                dtype=np.float64,
             ),
         )
 
@@ -79,26 +79,29 @@ class PositionOCPConfig:
         yaml_path = os.path.join(pkg_share, "config", config_filename)
         return cls.from_yaml(yaml_path)
 
+
 def build_position_target_ocp(
     x0: np.ndarray,
     model: pin.Model,
     config: PositionOCPConfig,
-    target_position: np.ndarray = None, 
+    target_position: np.ndarray = None,
 ) -> MPCOCP:
     """Builds a Crocoddyl OCP for reaching a Position target with the end-effector.
-    
+
     Args:
         x0: Initial state
         model: Pinocchio model
         config: OCP configuration (contient frame_name et default_target)
         target_position: Target position (optionnel, utilise config.default_target si None)
     """
-    
+
     # Utilise la target par défaut si non fournie
     if target_position is None:
         if config.default_target_position is None:
-            raise ValueError("No target_position provided and no default_target in config!")
-    
+            raise ValueError(
+                "No target_position provided and no default_target in config!"
+            )
+
     # Build OCP using OCPBuilder
     ocp_builder = OCPBuilder(
         initial_state=x0,
@@ -114,9 +117,9 @@ def build_position_target_ocp(
 
     # Cost 1: Reach the target
     running_cost_manager.add_frame_translation_cost(
-        frame_name=config.frame_name, 
-        target_position=config.default_target_position, 
-        weight=config.ee_tracking_weight
+        frame_name=config.frame_name,
+        target_position=config.default_target_position,
+        weight=config.ee_tracking_weight,
     )
 
     # Cost 2: State regularization

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 import crocoddyl
 import numpy as np
-import pinocchio as pin
 
 
 @dataclass
@@ -74,11 +73,11 @@ class MPCController:
         Args:
             new_target: New target position [x, y, z] (3,)
         """
-        
+
         assert new_target_position.shape == (3,), (
             f"Target position must be (3,), got {new_target_position.shape}"
         )
-        
+
         # Update running models costs
         for model in self.ocp.problem.runningModels:
             # Access the frame translation cost

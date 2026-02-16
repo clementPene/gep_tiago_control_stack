@@ -86,9 +86,7 @@ class TrajectoryVisualizer:
 
             # Print progress every 10 frames
             if i % 10 == 0:
-                distance_to_target = np.linalg.norm(
-                    ee_pos - self.target_position
-                )
+                distance_to_target = np.linalg.norm(ee_pos - self.target_position)
                 self.logger.info(
                     f"  Frame {i}/{len(trajectory_q)} | "
                     f"Distance to target: {distance_to_target:.4f}m"
@@ -139,33 +137,32 @@ class TrajectoryVisualizer:
         q_limits_violated = False
         for i, q in enumerate(xs_solution):
             q_vec = q[: self.model.nq]
-            
+
             # Check chaque coordonnée
             for j in range(self.model.nq):
                 q_value = q_vec[j]
                 lower = self.model.lowerPositionLimit[j]
                 upper = self.model.upperPositionLimit[j]
-                
+
                 if q_value < lower:
                     self.logger.warn(
                         f"Step {i}: q[{j}] BELOW limit: "
                         f"{q_value:.4f} < {lower:.4f} (violation: {lower - q_value:.4f})"
                     )
                     q_limits_violated = True
-                    
+
                 elif q_value > upper:
                     self.logger.warn(
                         f"Step {i}: q[{j}] ABOVE limit: "
                         f"{q_value:.4f} > {upper:.4f} (violation: {q_value - upper:.4f})"
                     )
                     q_limits_violated = True
-            
+
             if q_limits_violated:
                 break
 
         if not q_limits_violated:
             self.logger.info("All joint limits respected")
-
 
         self.logger.info("=" * 60)
 

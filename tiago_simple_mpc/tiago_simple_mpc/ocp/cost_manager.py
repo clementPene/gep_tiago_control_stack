@@ -89,13 +89,13 @@ class CostModelManager:
         self.cost_model_sum.addCost(name=name, cost=cost, weight=weight)
 
         return self
-    
+
     def add_frame_translation_cost(
         self,
         frame_name: str,
         target_position: np.ndarray,
         weight: float,
-        name: str = "frame_translation"
+        name: str = "frame_translation",
     ):
         """
         Add a frame translation (3D position) tracking cost.
@@ -158,7 +158,7 @@ class CostModelManager:
             self.state,
             frame_id,
             target_position,  # Reference 3D position
-            self.actuation.nu
+            self.actuation.nu,
         )
 
         # Wrap in cost model: (weight/2) * ||residual||^2
@@ -168,7 +168,6 @@ class CostModelManager:
         self.cost_model_sum.addCost(name=name, cost=cost, weight=weight)
 
         return self
-
 
     def add_regulation_state_cost(
         self, x_ref: np.ndarray, weight: float, name: str = "regulation_state"
@@ -414,7 +413,7 @@ class CostModelManager:
         self.cost_model_sum.addCost(name=name, cost=cost, weight=weight)
 
         return self
-    
+
     def get_costs(self):
         """
         Return the final constructed CostModelManager object.

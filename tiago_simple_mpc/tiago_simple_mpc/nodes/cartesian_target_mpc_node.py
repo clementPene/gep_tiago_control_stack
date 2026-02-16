@@ -51,7 +51,7 @@ class MPCNode(Node):
         # Load cartesian OCP config
         self.ocp_config = CartesianOCPConfig.from_package()
         self.mpcocp = None  # Will hold the built OCP problem and solver
-        
+
         # Model dimensions
         self.nq = self.model.nq
         self.nv = self.model.nv
@@ -68,7 +68,7 @@ class MPCNode(Node):
         self.target_frame = self.ocp_config.frame_name
         self.frame_id = self.model.getFrameId(self.target_frame)
         self.target_pose = self.ocp_config.get_default_target_pose()
-        
+
         self.get_logger().info(
             f"Target SE(3) pose:\n"
             f"  Position: {self.target_pose.translation}\n"
@@ -265,7 +265,9 @@ class MPCNode(Node):
 
             # Initialize MPC on first measurement
             if not self.first_measurement_received:
-                self.us_0 = self.current_sensor_py.joint_state.effort[:]  # u0 from sensors
+                self.us_0 = self.current_sensor_py.joint_state.effort[
+                    :
+                ]  # u0 from sensors
                 self.get_logger().info(f"u0 from sensors: {self.us_0}")  # Print u0
                 self._initialize_mpc()
                 self.first_measurement_received = True
@@ -285,9 +287,7 @@ class MPCNode(Node):
 
         # Build OCP using modular builder
         self.mpcocp = build_cartesian_target_ocp(
-            x0=self.x_measured,
-            model=self.model,
-            config=self.ocp_config
+            x0=self.x_measured, model=self.model, config=self.ocp_config
         )
 
         # Create MPC controller
@@ -315,7 +315,7 @@ class MPCNode(Node):
         # Wait for first measurement
         if not self.first_measurement_received or self.x_measured is None:
             return
-        
+
         # Initialize MPC start time
         if self.mpc_start_time is None:
             self.mpc_start_time = time.time()
@@ -326,31 +326,33 @@ class MPCNode(Node):
             t_start = time.time()
             dt, u_optimal = self.mpc_controller.step(self.x_measured)
             solve_time = time.time() - t_start
-            
+
             # Get end-effector pose
-            pin.forwardKinematics(self.model, self.data, self.x_measured[:self.model.nq])
+            pin.forwardKinematics(
+                self.model, self.data, self.x_measured[: self.model.nq]
+            )
             pin.updateFramePlacements(self.model, self.data)
             ee_pose = self.data.oMf[self.frame_id]
-            
+
             # Get solver info
             solver = self.mpc_controller.ocp.solver
             cost = solver.cost
             converged = solver.stop < solver.th_stop
-            
+
             # Log this MPC step
             timestamp = time.time() - self.mpc_start_time
             self.mpc_logger.log_step(
                 timestamp=timestamp,
                 ee_position=ee_pose.translation,
                 ee_target=self.target_pose.translation,
-                joint_state=self.x_measured[:self.model.nq],
-                joint_velocity=self.x_measured[self.model.nq:],
+                joint_state=self.x_measured[: self.model.nq],
+                joint_velocity=self.x_measured[self.model.nq :],
                 control=u_optimal,
                 cost=cost,
                 solve_time=solve_time,
-                converged=converged
+                converged=converged,
             )
-            
+
             # Build control message
             # Zero feedback matrix (pure feedforward MPC)
             K = np.zeros((self.nu, self.nx))
@@ -364,7 +366,7 @@ class MPCNode(Node):
             # Publish
             msg = control_numpy_to_msg(control_py)
             self.pub_control.publish(msg)
-            
+
         except Exception as e:
             self.get_logger().error(f"MPC step failed: {e}")
 
@@ -402,9 +404,7 @@ def main(args=None):
 
         # Create MPC node
         print("\nInitializing MPC node...")
-        node = MPCNode(
-            model, data, has_free_flyer=USE_FREE_FLYER
-        )
+        node = MPCNode(model, data, has_free_flyer=USE_FREE_FLYER)
 
         # Spin
         print("\n Starting control loop...\n")
@@ -422,16 +422,16 @@ def main(args=None):
         if node is not None:
             try:
                 print("\nSaving MPC logs...")
-                filepath = node.mpc_logger.plot_results(nq=node.model.nq)
-                print(f"Logs saved successfully!")
+                node.mpc_logger.plot_results(nq=node.model.nq)
+                print("Logs saved successfully!")
             except Exception as e:
                 print(f"Failed to save logs: {e}")
-            
+
             node.destroy_node()
-        
+
         if rclpy.ok():
             rclpy.shutdown()
-        
+
         print("\nShutdown complete\n")
 
 

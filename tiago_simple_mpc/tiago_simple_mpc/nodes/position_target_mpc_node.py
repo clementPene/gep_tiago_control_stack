@@ -53,7 +53,7 @@ class MPCNode(Node):
         # Load position OCP config
         self.ocp_config = PositionOCPConfig.from_package()
         self.mpcocp = None  # Will hold the built OCP problem and solver
-        
+
         # Model dimensions
         self.nq = self.model.nq
         self.nv = self.model.nv
@@ -69,8 +69,8 @@ class MPCNode(Node):
 
         self.target_frame = self.ocp_config.frame_name
         self.frame_id = self.model.getFrameId(self.target_frame)
-        self.target_position = None #self.ocp_config.default_target_position # now initialized in sensor callback
-        
+        self.target_position = None  # self.ocp_config.default_target_position # now initialized in sensor callback
+
         self.get_logger().info(
             f"Target position:\n"
             f"  Position: {self.target_position}\n"
@@ -103,7 +103,7 @@ class MPCNode(Node):
             qos_profile=qos_rt,
             qos_overriding_options=qos_opts,
         )
-        
+
         self.sub_target = self.create_subscription(
             PointStamped,
             "/mpc/target_position",
@@ -281,10 +281,10 @@ class MPCNode(Node):
                     f"Initial target set to current frame position:\n"
                     f"{self.target_position}"
                 )
-                
-                
-                
-                self.us_0 = self.current_sensor_py.joint_state.effort[:]  # u0 from sensors
+
+                self.us_0 = self.current_sensor_py.joint_state.effort[
+                    :
+                ]  # u0 from sensors
                 self.get_logger().info(f"u0 from sensors: {self.us_0}")  # Print u0
                 self._initialize_mpc()
                 self.first_measurement_received = True
@@ -298,36 +298,35 @@ class MPCNode(Node):
     def target_callback(self, msg: PointStamped):
         """
         Callback to update MPC target position from ROS topic.
-        
+
         Args:
             msg: PointStamped message with new target position
         """
         try:
             # Extract position from message
             new_target = np.array([msg.point.x, msg.point.y, msg.point.z])
-            
+
             if not self.first_measurement_received:
                 self.get_logger().warn(
                     "Received target but MPC not initialized yet. Ignoring.",
-                    throttle_duration_sec=2.0
+                    throttle_duration_sec=2.0,
                 )
                 return
-            
+
             if self.mpc_controller is None:
                 self.get_logger().warn(
                     "Received target but MPC controller is None. Ignoring.",
-                    throttle_duration_sec=2.0
+                    throttle_duration_sec=2.0,
                 )
                 return
-            
 
             self.target_position = new_target.copy()
             self.mpc_controller.update_target_position(new_target)
-            
+
             self.get_logger().info(
                 f"Target updated to: [{new_target[0]:.3f}, {new_target[1]:.3f}, {new_target[2]:.3f}]"
             )
-            
+
         except Exception as e:
             self.get_logger().error(f"Error in target_callback: {e}")
 
@@ -343,7 +342,7 @@ class MPCNode(Node):
             x0=self.x_measured,
             model=self.model,
             config=self.ocp_config,
-            target_position=self.target_position
+            target_position=self.target_position,
         )
 
         # Create MPC controller
@@ -371,7 +370,7 @@ class MPCNode(Node):
         # Wait for first measurement
         if not self.first_measurement_received or self.x_measured is None:
             return
-        
+
         # Initialize MPC start time
         if self.mpc_start_time is None:
             self.mpc_start_time = time.time()
@@ -382,31 +381,33 @@ class MPCNode(Node):
             t_start = time.time()
             dt, u_optimal = self.mpc_controller.step(self.x_measured)
             solve_time = time.time() - t_start
-            
+
             # Get end-effector pose
-            pin.forwardKinematics(self.model, self.data, self.x_measured[:self.model.nq])
+            pin.forwardKinematics(
+                self.model, self.data, self.x_measured[: self.model.nq]
+            )
             pin.updateFramePlacements(self.model, self.data)
             ee_pose = self.data.oMf[self.frame_id]
-            
+
             # Get solver info
             solver = self.mpc_controller.ocp.solver
             cost = solver.cost
             converged = solver.stop < solver.th_stop
-            
+
             # Log this MPC step
             timestamp = time.time() - self.mpc_start_time
             self.mpc_logger.log_step(
                 timestamp=timestamp,
                 ee_position=ee_pose.translation,
                 ee_target=self.target_position,
-                joint_state=self.x_measured[:self.model.nq],
-                joint_velocity=self.x_measured[self.model.nq:],
+                joint_state=self.x_measured[: self.model.nq],
+                joint_velocity=self.x_measured[self.model.nq :],
                 control=u_optimal,
                 cost=cost,
                 solve_time=solve_time,
-                converged=converged
+                converged=converged,
             )
-            
+
             # Build control message
             # Zero feedback matrix (pure feedforward MPC)
             K = np.zeros((self.nu, self.nx))
@@ -420,7 +421,7 @@ class MPCNode(Node):
             # Publish
             msg = control_numpy_to_msg(control_py)
             self.pub_control.publish(msg)
-            
+
         except Exception as e:
             self.get_logger().error(f"MPC step failed: {e}")
 
@@ -458,9 +459,7 @@ def main(args=None):
 
         # Create MPC node
         print("\nInitializing MPC node...")
-        node = MPCNode(
-            model, data, has_free_flyer=USE_FREE_FLYER
-        )
+        node = MPCNode(model, data, has_free_flyer=USE_FREE_FLYER)
 
         # Spin
         print("\n Starting control loop...\n")
@@ -478,16 +477,16 @@ def main(args=None):
         if node is not None:
             try:
                 print("\nSaving MPC logs...")
-                filepath = node.mpc_logger.plot_results(nq=node.model.nq)
-                print(f"Logs saved successfully!")
+                node.mpc_logger.plot_results(nq=node.model.nq)
+                print("Logs saved successfully!")
             except Exception as e:
                 print(f"Failed to save logs: {e}")
-            
+
             node.destroy_node()
-        
+
         if rclpy.ok():
             rclpy.shutdown()
-        
+
         print("\nShutdown complete\n")
 
 

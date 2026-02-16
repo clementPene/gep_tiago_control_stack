@@ -4,19 +4,17 @@ Simple OCP solver node for Tiago reaching task.
 Loads URDF from ROS topic, builds OCP, solves once, and displays results on meshcat
 """
 
-import os
-import time
-from ament_index_python.packages import get_package_share_directory
-
 import rclpy
 from rclpy.node import Node
 import numpy as np
 import pinocchio as pin
 import crocoddyl
 
-import time
 
-from tiago_simple_mpc.mpc.build_cartesian_target_ocp import CartesianOCPConfig, build_cartesian_target_ocp
+from tiago_simple_mpc.mpc.build_cartesian_target_ocp import (
+    CartesianOCPConfig,
+    build_cartesian_target_ocp,
+)
 from tiago_simple_mpc.core.model_utils import load_reduced_pinocchio_model
 from tiago_simple_mpc.ocp.ocp_logger import OCPLogger
 
@@ -38,11 +36,11 @@ class OCPReachingNode(Node):
 
     def __init__(self):
         super().__init__("ocp_reaching_test")
-        
+
         # Load cartesian OCP config
         self.ocp_config = CartesianOCPConfig.from_package()
         self.mpcocp = None  # Will hold the built OCP problem and solver
-        
+
         target_joints = [
             # 'torso_lift_joint',
             "arm_1_joint",
@@ -56,7 +54,8 @@ class OCPReachingNode(Node):
 
         self.model, self.data, self.visual_model, self.visual_data = (
             load_reduced_pinocchio_model(
-                target_joints_names=target_joints, has_free_flyer=self.ocp_config.has_free_flyer
+                target_joints_names=target_joints,
+                has_free_flyer=self.ocp_config.has_free_flyer,
             )
         )
 
@@ -122,7 +121,6 @@ class OCPReachingNode(Node):
                 2:
             ]  # Without wheels
             self.us_0 = self.current_sensor_py.joint_state.effort[:]  # With wheels
-            
 
             # DEBUG: Print raw received data
             self.get_logger().info(
@@ -220,7 +218,6 @@ class OCPReachingNode(Node):
             pin.updateFramePlacement(self.model, self.data, self.frame_id)
             ee_measured_pose = self.data.oMf[self.frame_id].copy()  # Full SE3 pose
             ee_measured = ee_measured_pose.translation.copy()
-
 
             # Display frames
             frames_to_display = [self.target_frame]
@@ -366,15 +363,13 @@ class OCPReachingNode(Node):
 
     def build_ocp(self):
         """Build the OCP problem using factory."""
-        
+
         self.mpcocp = build_cartesian_target_ocp(
-            x0=self.x_measured,
-            model=self.model,
-            config=self.ocp_config
+            x0=self.x_measured, model=self.model, config=self.ocp_config
         )
 
     def solve_ocp(self):
-        """Solve the OCP """
+        """Solve the OCP"""
 
         # Solver options
         self.mpcocp.solver.setCallbacks([crocoddyl.CallbackVerbose()])
@@ -385,14 +380,18 @@ class OCPReachingNode(Node):
         # Solve
         self.get_logger().info("Running FDDP solver...")
 
-        converged = self.mpcocp.solver.solve(xs_init, us_init, self.ocp_config.max_iterations, False)
+        converged = self.mpcocp.solver.solve(
+            xs_init, us_init, self.ocp_config.max_iterations, False
+        )
 
         # Extract trajectory (only positions, not velocities)
         nq = self.model.nq
         self.trajectory_q = [xs[:nq] for xs in self.mpcocp.solver.xs]
 
         if converged:
-            self.get_logger().info(f"Solver converged in {self.mpcocp.solver.iter} iterations")
+            self.get_logger().info(
+                f"Solver converged in {self.mpcocp.solver.iter} iterations"
+            )
         else:
             self.get_logger().warn(
                 f"Solver did NOT converge after {self.mpcocp.solver.iter} iterations"
@@ -405,9 +404,7 @@ class OCPReachingNode(Node):
         # Log and save
         self.ocp_logger = OCPLogger(log_dir="log_ocp")
         filepath = self.ocp_logger.plot_results(
-            solver=self.mpcocp.solver,
-            nq=self.model.nq,
-            converged=converged
+            solver=self.mpcocp.solver, nq=self.model.nq, converged=converged
         )
         self.get_logger().info(f"OCP plots saved to: {filepath}")
 
