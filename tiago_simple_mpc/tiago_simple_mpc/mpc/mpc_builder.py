@@ -67,26 +67,35 @@ class MPCController:
         self.xs_init[0] = x_meas.copy()
         self.ocp.problem.x0 = x_meas.copy()
 
-    def update_target(self, new_target: pin.SE3):
+    def update_target_position(self, new_target_position: np.ndarray):
         """
-        Update target pose during MPC execution.
+        Update target position during MPC execution.
 
         Args:
-            new_target: New SE3 target pose
-
-        TODO: Implement reference update in running models cost functions
+            new_target: New target position [x, y, z] (3,)
         """
-        # TODO: Update frame placement cost reference
-        # for model in self.ocp.problem.runningModels:
-        #     frame_cost = model.differential.costs.costs["frame_placement"].cost
-        #     frame_cost.ref = new_target
-        #
-        # # Update terminal cost too
-        # terminal_cost = self.ocp.problem.terminalModel.differential.costs.costs["frame_placement"].cost
-        # terminal_cost.ref = new_target
+        
+        assert new_target_position.shape == (3,), (
+            f"Target position must be (3,), got {new_target_position.shape}"
+        )
+        
+        # Update running models costs
+        for model in self.ocp.problem.runningModels:
+            # Access the frame translation cost
+            if "frame_translation" in model.differential.costs.costs:
+                cost_item = model.differential.costs.costs["frame_translation"]
+                residual = cost_item.cost.residual
+                residual.reference = new_target_position.copy()
+
+        # Update terminal model cost
+        terminal_model = self.ocp.problem.terminalModel
+        if "frame_translation" in terminal_model.differential.costs.costs:
+            cost_item = terminal_model.differential.costs.costs["frame_translation"]
+            residual = cost_item.cost.residual
+            residual.reference = new_target_position.copy()
 
         if self.verbose:
-            print("⚠️  update_target() called but not yet implemented!")
+            print(f"Target updated to: {new_target_position}")
 
     def reset(self, x0: np.ndarray, u0: np.ndarray | None = None):
         """

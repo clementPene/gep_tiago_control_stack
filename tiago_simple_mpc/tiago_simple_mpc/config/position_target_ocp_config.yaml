@@ -1,0 +1,20 @@
+position_ocp:
+
+  dt: 0.01
+  horizon_length: 50
+  max_iterations: 10 # solver iterations
+  has_free_flyer: true
+
+  # Cost weights
+  ee_tracking_weight: 100.0
+  state_reg_weight: 0.01
+  control_reg_weight: 0.01
+  
+  # Terminal cost multiplier for the state regularization term
+  terminal_weight_multiplier: 10.0
+
+  # Task configuration
+  frame_name: "gripper_grasping_frame"
+  
+  # Default target
+  default_target_position: [0.3, 0.2, 0.6]  # [x, y, z]

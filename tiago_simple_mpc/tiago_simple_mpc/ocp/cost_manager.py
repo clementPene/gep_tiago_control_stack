@@ -34,9 +34,6 @@ class CostModelManager:
             with v ∈ ℝ³ (linear) and ω ∈ ℝ³ (angular)
         - ||·|| is the Euclidean norm in ℝ⁶
 
-        This formulation handles both position and orientation errors in a unified way,
-        and is particularly robust for frames with complex local transformations.
-
         Args:
             frame_name (str): Name of the frame to track (e.g., 'gripper_grasping_frame').
             target_pose (pin.SE3): The target SE3 pose (position + orientation) in the world frame.
@@ -92,6 +89,86 @@ class CostModelManager:
         self.cost_model_sum.addCost(name=name, cost=cost, weight=weight)
 
         return self
+    
+    def add_frame_translation_cost(
+        self,
+        frame_name: str,
+        target_position: np.ndarray,
+        weight: float,
+        name: str = "frame_translation"
+    ):
+        """
+        Add a frame translation (3D position) tracking cost.
+
+        This cost penalizes only the position difference between a frame and a target,
+        ignoring orientation. Useful when you only care about reaching a 3D point in space.
+
+        Mathematical Formulation:
+        L(x) = (weight / 2) * ||p_frame(q) - p_target||^2
+
+        where:
+        - p_frame(q) ∈ ℝ³ is the 3D position of the frame (from forward kinematics)
+        - p_target ∈ ℝ³ is the target 3D position in the world frame
+        - ||·|| is the Euclidean norm in ℝ³
+
+        Args:
+            frame_name (str): Name of the frame to track (e.g., 'end_effector').
+            target_position (np.ndarray): Target 3D position [x, y, z] in world frame.
+                                        Shape: (3,)
+            weight (float): Scalar weight for this cost. Higher values prioritize
+                            position tracking over other objectives.
+            name (str, optional): Unique name for the cost. Defaults to
+                                "frame_translation".
+
+        Returns:
+            self: The CostModelManager instance for chainable calls.
+
+        Raises:
+            TypeError: If target_position is not a numpy array.
+            ValueError: If target_position doesn't have shape (3,) or frame doesn't exist.
+        """
+
+        # Input Validation
+        if not isinstance(target_position, np.ndarray):
+            raise TypeError(
+                f"target_position must be a numpy array, got {type(target_position)}. "
+                f"Use: np.array([x, y, z])"
+            )
+
+        if target_position.shape != (3,):
+            raise ValueError(
+                f"target_position must have shape (3,), got {target_position.shape}. "
+                f"Expected: np.array([x, y, z])"
+            )
+
+        # Check if frame exists
+        if not self.state.pinocchio.existFrame(frame_name):
+            raise ValueError(
+                f"Frame '{frame_name}' does not exist in the robot model. "
+                f"Available frames: {[self.state.pinocchio.frames[i].name for i in range(self.state.pinocchio.nframes)]}"
+            )
+
+        # Get frame ID
+        frame_id = self.state.pinocchio.getFrameId(frame_name)
+
+        # Create residual: measures 3D position difference
+        # ResidualModelFrameTranslation computes: p_frame(q) - p_ref
+        # This gives a 3D residual vector in ℝ³
+        residual = crocoddyl.ResidualModelFrameTranslation(
+            self.state,
+            frame_id,
+            target_position,  # Reference 3D position
+            self.actuation.nu
+        )
+
+        # Wrap in cost model: (weight/2) * ||residual||^2
+        cost = crocoddyl.CostModelResidual(self.state, residual)
+
+        # Add to cost sum
+        self.cost_model_sum.addCost(name=name, cost=cost, weight=weight)
+
+        return self
+
 
     def add_regulation_state_cost(
         self, x_ref: np.ndarray, weight: float, name: str = "regulation_state"
@@ -337,7 +414,7 @@ class CostModelManager:
         self.cost_model_sum.addCost(name=name, cost=cost, weight=weight)
 
         return self
-
+    
     def get_costs(self):
         """
         Return the final constructed CostModelManager object.

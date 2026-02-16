@@ -21,7 +21,7 @@ class TrajectoryVisualizer:
         model: pin.Model,
         data: pin.Data,
         frame_id: int,
-        target_pose: pin.SE3,
+        target_position: np.ndarray,
         dt: float,
         logger: Node,
     ):
@@ -31,7 +31,7 @@ class TrajectoryVisualizer:
             model: Pinocchio model
             data: Pinocchio data
             frame_id: End-effector frame ID
-            target_pose: Target SE3 pose
+            target_position: Target position (3D vector)
             dt: Time step between nodes
             logger: ROS2 logger for info/warnings
         """
@@ -39,7 +39,7 @@ class TrajectoryVisualizer:
         self.model = model
         self.data = data
         self.frame_id = frame_id
-        self.target_pose = target_pose
+        self.target_position = target_position
         self.dt = dt
         self.logger = logger
 
@@ -87,7 +87,7 @@ class TrajectoryVisualizer:
             # Print progress every 10 frames
             if i % 10 == 0:
                 distance_to_target = np.linalg.norm(
-                    ee_pos - self.target_pose.translation
+                    ee_pos - self.target_position
                 )
                 self.logger.info(
                     f"  Frame {i}/{len(trajectory_q)} | "
@@ -122,10 +122,10 @@ class TrajectoryVisualizer:
         pin.updateFramePlacement(self.model, self.data, self.frame_id)
         ee_pos_final = self.data.oMf[self.frame_id].translation
 
-        error = np.linalg.norm(ee_pos_final - self.target_pose.translation)
+        error = np.linalg.norm(ee_pos_final - self.target_position)
 
         self.logger.info(f"Final EE position: {ee_pos_final}")
-        self.logger.info(f"Target position:   {self.target_pose.translation}")
+        self.logger.info(f"Target position:   {self.target_position}")
         self.logger.info(f"Position error:    {error:.6f} m")
 
         # Control statistics
@@ -139,15 +139,33 @@ class TrajectoryVisualizer:
         q_limits_violated = False
         for i, q in enumerate(xs_solution):
             q_vec = q[: self.model.nq]
-            if np.any(q_vec < self.model.lowerPositionLimit) or np.any(
-                q_vec > self.model.upperPositionLimit
-            ):
-                q_limits_violated = True
-                self.logger.warn(f"Joint limits violated at step {i}")
+            
+            # Check chaque coordonnée
+            for j in range(self.model.nq):
+                q_value = q_vec[j]
+                lower = self.model.lowerPositionLimit[j]
+                upper = self.model.upperPositionLimit[j]
+                
+                if q_value < lower:
+                    self.logger.warn(
+                        f"Step {i}: q[{j}] BELOW limit: "
+                        f"{q_value:.4f} < {lower:.4f} (violation: {lower - q_value:.4f})"
+                    )
+                    q_limits_violated = True
+                    
+                elif q_value > upper:
+                    self.logger.warn(
+                        f"Step {i}: q[{j}] ABOVE limit: "
+                        f"{q_value:.4f} > {upper:.4f} (violation: {q_value - upper:.4f})"
+                    )
+                    q_limits_violated = True
+            
+            if q_limits_violated:
                 break
 
         if not q_limits_violated:
             self.logger.info("All joint limits respected")
+
 
         self.logger.info("=" * 60)
 

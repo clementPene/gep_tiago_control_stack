@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Cartesian MPC Controller Node for Tiago Robot
+Position MPC Controller Node for Tiago Robot
 Supports both fixed-base and floating-base configurations.
 """
 
@@ -23,17 +23,19 @@ import linear_feedback_controller_msgs_py.lfc_py_types as lfc_py_types
 # MPC imports
 from tiago_simple_mpc.mpc.mpc_logger import MPCLogger
 from tiago_simple_mpc.core.model_utils import load_reduced_pinocchio_model
-from tiago_simple_mpc.mpc.build_cartesian_target_ocp import (
-    CartesianOCPConfig,
-    build_cartesian_target_ocp,
+from tiago_simple_mpc.mpc.build_position_target_ocp import (
+    PositionOCPConfig,
+    build_position_target_ocp,
 )
 from tiago_simple_mpc.mpc.mpc_builder import MPCController
+
+from geometry_msgs.msg import PointStamped
 
 
 class MPCNode(Node):
     def __init__(self, pin_model, pin_data, has_free_flyer=False):
         """
-        MPC Controller Node for Cartesian end-effector tracking.
+        MPC Controller Node for Position end-effector tracking.
 
         Args:
             pin_model: Pinocchio model (with or without FreeFlyer)
@@ -42,14 +44,14 @@ class MPCNode(Node):
             has_free_flyer: True if model has floating base, False for fixed base
         """
         super().__init__("mpc_node")
-        self.get_logger().info("Initializing MPC node (Cartesian SE(3) Tracking)...")
+        self.get_logger().info("Initializing MPC node (Position Tracking)...")
 
         # Store model
         self.model = pin_model
         self.data = pin_data
 
-        # Load cartesian OCP config
-        self.ocp_config = CartesianOCPConfig.from_package()
+        # Load position OCP config
+        self.ocp_config = PositionOCPConfig.from_package()
         self.mpcocp = None  # Will hold the built OCP problem and solver
         
         # Model dimensions
@@ -67,11 +69,11 @@ class MPCNode(Node):
 
         self.target_frame = self.ocp_config.frame_name
         self.frame_id = self.model.getFrameId(self.target_frame)
-        self.target_pose = self.ocp_config.get_default_target_pose()
+        self.target_position = None #self.ocp_config.default_target_position # now initialized in sensor callback
         
         self.get_logger().info(
-            f"Target SE(3) pose:\n"
-            f"  Position: {self.target_pose.translation}\n"
+            f"Target position:\n"
+            f"  Position: {self.target_position}\n"
             f"  Rotation: identity"
         )
 
@@ -100,6 +102,13 @@ class MPCNode(Node):
             self.sensor_callback,
             qos_profile=qos_rt,
             qos_overriding_options=qos_opts,
+        )
+        
+        self.sub_target = self.create_subscription(
+            PointStamped,
+            "/mpc/target_position",
+            self.target_callback,
+            qos_profile=10,
         )
 
         # Control timer at 100Hz
@@ -164,10 +173,10 @@ class MPCNode(Node):
 
         # --- VALIDATION ---
         assert q_planar.shape == (4,), (
-            f"q_planar shape error: {q_planar.shape}, expected (4,)"
+            f"❌ q_planar shape error: {q_planar.shape}, expected (4,)"
         )
         assert v_planar.shape == (3,), (
-            f"v_planar shape error: {v_planar.shape}, expected (3,)"
+            f"❌ v_planar shape error: {v_planar.shape}, expected (3,)"
         )
 
         return q_planar, v_planar
@@ -265,6 +274,16 @@ class MPCNode(Node):
 
             # Initialize MPC on first measurement
             if not self.first_measurement_received:
+                pin.framesForwardKinematics(self.model, self.data, q_full)
+                current_frame_pose = self.data.oMf[self.frame_id]  # SE3
+                self.target_position = current_frame_pose.translation.copy()  # (3,)
+                self.get_logger().info(
+                    f"Initial target set to current frame position:\n"
+                    f"{self.target_position}"
+                )
+                
+                
+                
                 self.us_0 = self.current_sensor_py.joint_state.effort[:]  # u0 from sensors
                 self.get_logger().info(f"u0 from sensors: {self.us_0}")  # Print u0
                 self._initialize_mpc()
@@ -276,6 +295,42 @@ class MPCNode(Node):
                 f"Sensor callback error: {e}", throttle_duration_sec=1.0
             )
 
+    def target_callback(self, msg: PointStamped):
+        """
+        Callback to update MPC target position from ROS topic.
+        
+        Args:
+            msg: PointStamped message with new target position
+        """
+        try:
+            # Extract position from message
+            new_target = np.array([msg.point.x, msg.point.y, msg.point.z])
+            
+            if not self.first_measurement_received:
+                self.get_logger().warn(
+                    "Received target but MPC not initialized yet. Ignoring.",
+                    throttle_duration_sec=2.0
+                )
+                return
+            
+            if self.mpc_controller is None:
+                self.get_logger().warn(
+                    "Received target but MPC controller is None. Ignoring.",
+                    throttle_duration_sec=2.0
+                )
+                return
+            
+
+            self.target_position = new_target.copy()
+            self.mpc_controller.update_target_position(new_target)
+            
+            self.get_logger().info(
+                f"Target updated to: [{new_target[0]:.3f}, {new_target[1]:.3f}, {new_target[2]:.3f}]"
+            )
+            
+        except Exception as e:
+            self.get_logger().error(f"Error in target_callback: {e}")
+
     def _initialize_mpc(self):
         """
         Initialize MPC controller with first measured state.
@@ -284,10 +339,11 @@ class MPCNode(Node):
         self.get_logger().info("Building OCP...")
 
         # Build OCP using modular builder
-        self.mpcocp = build_cartesian_target_ocp(
+        self.mpcocp = build_position_target_ocp(
             x0=self.x_measured,
             model=self.model,
-            config=self.ocp_config
+            config=self.ocp_config,
+            target_position=self.target_position
         )
 
         # Create MPC controller
@@ -342,7 +398,7 @@ class MPCNode(Node):
             self.mpc_logger.log_step(
                 timestamp=timestamp,
                 ee_position=ee_pose.translation,
-                ee_target=self.target_pose.translation,
+                ee_target=self.target_position,
                 joint_state=self.x_measured[:self.model.nq],
                 joint_velocity=self.x_measured[self.model.nq:],
                 control=u_optimal,
@@ -373,7 +429,7 @@ def main(args=None):
     rclpy.init(args=args)
 
     print("\n" + "=" * 60)
-    print(" Tiago MPC Cartesian Controller")
+    print(" Tiago MPC Position Controller")
     print("=" * 60 + "\n")
 
     try:

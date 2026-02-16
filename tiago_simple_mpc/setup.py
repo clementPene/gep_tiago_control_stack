@@ -34,7 +34,9 @@ setup(
     entry_points={
         "console_scripts": [
             "cartesian_target_mpc_node = tiago_simple_mpc.nodes.cartesian_target_mpc_node:main",
+            "position_target_mpc_node = tiago_simple_mpc.nodes.position_target_mpc_node:main",
             "test_cartesian_target_ocp = tiago_simple_mpc.tests.test_cartesian_target_ocp:main",
+            "test_position_target_ocp = tiago_simple_mpc.tests.test_position_target_ocp:main",
         ],
     },
 )

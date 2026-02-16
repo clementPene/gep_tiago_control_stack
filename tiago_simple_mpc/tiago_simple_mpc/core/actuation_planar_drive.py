@@ -50,18 +50,6 @@ class ActuationModelPlanarDrive(crocoddyl.ActuationModelAbstract):
         r = wheel_radius
         d = wheel_separation
 
-        # Differential drive Jacobian: maps [ω_left, ω_right] → [v_x, v_y, ω_z]
-        # v_x = r * (ω_L + ω_R) / 2
-        # v_y = 0  (non-holonomic constraint)
-        # ω_z = r * (ω_R - ω_L) / d
-        self.J_diff = np.array(
-            [
-                [r / 2, r / 2],  # v_x contribution
-                [0.0, 0.0],  # v_y = 0 (non-holonomic)
-                [-r / d, r / d],  # ω_z contribution
-            ]
-        )
-
         # Torque matrix:
         # Maps [τ_L, τ_R] → [F_x, F_y, M_z]
         self.J_force = np.array(
